@@ -1,4 +1,6 @@
 #include<ncurses.h>
+#include<stdlib.h>
+#include<string.h>
 
 typedef struct window
 {
@@ -23,7 +25,8 @@ int main()
     bool exit = false; 
     int cursInitX = 1;
     int cursInitY = 1;
-
+    int width = 0;
+    int height = 0;
 	while (!exit)
     {
         int row , col;
@@ -36,6 +39,11 @@ int main()
         wrefresh(win);
 
         keypad(win, TRUE);
+
+        
+
+
+
         //BUTTON TRIGGER
         int ch = wgetch(win);
         if (ch == 'q' || ch == 'Q')
@@ -51,25 +59,49 @@ int main()
                     cursInitX++;
                 }
                 break;
+                
             case KEY_LEFT:
                 if (cursInitX > 1)
                 {
                     cursInitX--;
                 }
                 break;
+                
             case KEY_UP:
                 if (cursInitY > 1)
                 {
                     cursInitY--;
                 }
                 break;
+                
             case KEY_DOWN:
                 if (cursInitY < win1.height - 2)
                 {
                     cursInitY++;
                 }
                 break;
-        }  
+
+            case 'd':
+            case 'D':
+            {
+                char widthStr[50];
+                char heightStr[50];
+                mvwprintw(win, cursInitY, cursInitX, "ENTER WIDTH:");
+                wrefresh(win);
+                echo();
+                mvwgetnstr(win, cursInitY, cursInitX + 15, widthStr, 49);
+                width = atoi(widthStr);
+                noecho();
+                mvwprintw(win, cursInitY, cursInitX, "ENTER HEIGHT:");
+                wrefresh(win);
+                echo();
+                mvwgetnstr(win, cursInitY, cursInitX + 15, heightStr, 49);
+                height = atoi(heightStr);
+                noecho();
+                
+                break;
+            }
+        }
         
         delwin(win);
         
