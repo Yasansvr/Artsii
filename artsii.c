@@ -33,6 +33,12 @@ typedef struct line
     int length;
 }line;
 
+typedef struct corner {
+    int x;
+    int y;
+    chtype ch;
+} Corner;
+
 int main()
 {
 	initscr();//initialize cursor mode
@@ -40,6 +46,7 @@ int main()
 	noecho();//echo swtiched off
     cbreak();
     curs_set(1);
+    
     refresh();
 	keypad(stdscr,TRUE);//function keys reading enabled
     bool exit = false; 
@@ -63,7 +70,11 @@ int main()
     line lines[100];
     int line_count = 0;
 
-    int sec = 0;
+    Corner corners[100];
+    int corner_count = 0;
+
+    int memKey = 0;
+    int ch2;
 
 	while (!exit)
     {
@@ -71,7 +82,9 @@ int main()
         getmaxyx(stdscr,row,col );
         winCor win1 = {row , col , 0 , 0 };
         WINDOW *win = newwin(win1.height , win1.width , win1.start_y , win1.start_x);
+        wattron(win, A_REVERSE);
         mvwprintw(win, row-2, (col-strlen(help))/2, "%s", help);
+        wattroff(win, A_REVERSE);
         mvwprintw(win, 1, (col-strlen(title))/2, "%s", title);
         
         box(win, 0, 0);
@@ -113,25 +126,27 @@ int main()
         //DRAW LINES
         for (int i = 0; i < line_count; i++)
         {
-            sec = i;
-            if (lines[i].dir == KEY_DOWN)
+            switch (lines[i].dir)
             {
+            case KEY_DOWN:
                 mvwvline(win, lines[i].memy, lines[i].memx, 0, lines[i].length);
-            }
-            else if (lines[i].dir == KEY_UP)
-            {
-                mvwvline(win, lines[i].memy - lines[i].length + 1, lines[i].memx, 0, lines[i].length);
-            }
-            else if (lines[i].dir == KEY_RIGHT)
-            {
+                break;
+            case KEY_RIGHT:
                 mvwhline(win, lines[i].memy, lines[i].memx, 0, lines[i].length);
-            }
-            else if (lines[i].dir == KEY_LEFT)
-            {
+                break;
+            case KEY_UP:
+                mvwvline(win, lines[i].memy - lines[i].length + 1, lines[i].memx, 0, lines[i].length);
+                break;
+            case KEY_LEFT:
                 mvwhline(win, lines[i].memy, lines[i].memx - lines[i].length + 1, 0, lines[i].length);
+                break;
             }
-            wmove(win, cursInitY, cursInitX);
         }
+        for (int i = 0; i < corner_count; i++)
+        {
+            mvwaddch(win, corners[i].y, corners[i].x, corners[i].ch);
+        }
+        wmove(win, cursInitY, cursInitX);
         
 
 
@@ -145,11 +160,45 @@ int main()
 
         if (!done) {
             if (ch == 10) {
-                sec++;
                 done = true;
-            } else if (line_count > 0 && ch == lines[sec].dir) {
-                // Grow the line when arrow keys are pressed
-                lines[sec].length++;
+            } else if (line_count > 0) {
+                int curr = line_count - 1;
+                if (ch == lines[curr].dir) {
+                    // Grow the line when arrow keys are pressed
+                    lines[curr].length++;
+                } else if (ch == KEY_UP || ch == KEY_DOWN || ch == KEY_LEFT || ch == KEY_RIGHT) {
+                    // Add corner and change direction
+                    int endx = lines[curr].memx;
+                    int endy = lines[curr].memy;
+                    
+                    if (lines[curr].dir == KEY_RIGHT) endx += lines[curr].length - 1;
+                    else if (lines[curr].dir == KEY_LEFT) endx -= lines[curr].length - 1;
+                    else if (lines[curr].dir == KEY_DOWN) endy += lines[curr].length - 1;
+                    else if (lines[curr].dir == KEY_UP) endy -= lines[curr].length - 1;
+
+                    chtype corner = 0;
+                    if (lines[curr].dir == KEY_RIGHT && ch == KEY_DOWN) corner = ACS_URCORNER;
+                    else if (lines[curr].dir == KEY_RIGHT && ch == KEY_UP) corner = ACS_LRCORNER;
+                    else if (lines[curr].dir == KEY_LEFT && ch == KEY_DOWN) corner = ACS_ULCORNER;
+                    else if (lines[curr].dir == KEY_LEFT && ch == KEY_UP) corner = ACS_LLCORNER;
+                    else if (lines[curr].dir == KEY_DOWN && ch == KEY_RIGHT) corner = ACS_LLCORNER;
+                    else if (lines[curr].dir == KEY_DOWN && ch == KEY_LEFT) corner = ACS_LRCORNER;
+                    else if (lines[curr].dir == KEY_UP && ch == KEY_RIGHT) corner = ACS_ULCORNER;
+                    else if (lines[curr].dir == KEY_UP && ch == KEY_LEFT) corner = ACS_URCORNER;
+
+                    if (corner != 0 && line_count < 100 && corner_count < 100) {
+                        corners[corner_count].x = endx;
+                        corners[corner_count].y = endy;
+                        corners[corner_count].ch = corner;
+                        corner_count++;
+
+                        lines[line_count].memx = endx;
+                        lines[line_count].memy = endy;
+                        lines[line_count].dir = ch;
+                        lines[line_count].length = 2;
+                        line_count++;
+                    }
+                }
             }
         }
 
@@ -257,8 +306,7 @@ int main()
                     mvwprintw(win, 1, 1, " ~ LINE MODE ~");
                     curs_set(0);
                     wrefresh(win);
-                    wtimeout(win, -1); // Block and wait for direction
-                    int ch2 = wgetch(win);
+                    ch2 = wgetch(win);
                     curs_set(1);
                     if (ch2 == KEY_UP || ch2 == KEY_DOWN || ch2 == KEY_LEFT || ch2 == KEY_RIGHT)
                     {
@@ -267,13 +315,18 @@ int main()
                         lines[line_count].dir = ch2;
                         lines[line_count].length = 1;
                         line_count++;
-                        done = false; // Start growing!
+                        done = false; 
                     }
                 }
                 break;
             case 'x':
             case 'X':
-                line_count--;
+                if (line_count > 0) {
+                    if (corner_count > 0 && lines[line_count - 1].memx == corners[corner_count - 1].x && lines[line_count - 1].memy == corners[corner_count - 1].y) {
+                        corner_count--;
+                    }
+                    line_count--;
+                }
                 break;
                 
                 
