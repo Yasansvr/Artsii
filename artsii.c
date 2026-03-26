@@ -42,6 +42,11 @@ typedef struct corner {
 int main()
 {
 	initscr();//initialize cursor mode
+    if (has_colors()) {
+        start_color();
+        init_pair(1, COLOR_WHITE, COLOR_BLUE);
+        init_pair(2, COLOR_BLACK, COLOR_WHITE);
+    }
 	raw();//disable inline buffering
 	noecho();//echo swtiched off
     cbreak();
@@ -57,7 +62,7 @@ int main()
     int memy;
     int height = 0;
     int width = 0;
-    char help[] = "'D' to draw, 'W' to write text, 'L' to draw line |'C' to clear last rectangle, 'Z' to delete last text, 'X' to delete last line | 'Q' to quit";
+    char help[] = "'H' for Help";
     char title[] = "ARTSII";
     char text[100];
     
@@ -73,8 +78,11 @@ int main()
     Corner corners[100];
     int corner_count = 0;
 
-    int memKey = 0;
+    bool helpwin = false;
     int ch2;
+
+    WINDOW* helpwin1 = NULL;
+    int ch3;
 
 	while (!exit)
     {
@@ -93,6 +101,7 @@ int main()
         keypad(win, TRUE);
 
         wtimeout(win, -1); // Always block for input
+
 
         //DRAW RECTANGLES
         for (int i = 0; i < rect_count; i++)
@@ -150,6 +159,65 @@ int main()
         
 
 
+
+        //HELP SESSION
+        if (helpwin)
+        {
+            noecho();
+            curs_set(0);
+            
+            int hw_h = win1.height * 2 / 3;
+            int hw_w = win1.width * 2 / 3;
+            if (hw_h < 13) hw_h = 13;
+            if (hw_w < 40) hw_w = 40;
+            int hw_y = (row - hw_h) / 2;
+            int hw_x = (col - hw_w) / 2;
+            
+            helpwin1 = newwin(hw_h, hw_w, hw_y, hw_x);
+            if (helpwin1) {
+                wbkgd(helpwin1, COLOR_PAIR(1));
+                box(helpwin1, 0, 0);
+                wrefresh(helpwin1);
+                
+                int hw2_h = hw_h - 4;
+                int hw2_w = hw_w - 4;
+                int hw2_y = hw_y + 2;
+                int hw2_x = hw_x + 2;
+                
+                WINDOW *helpwin2 = newwin(hw2_h, hw2_w, hw2_y, hw2_x);
+                if (helpwin2) {
+                    wbkgd(helpwin2, COLOR_PAIR(2));
+                    box(helpwin2, 0, 0);
+                    
+                    wattron(helpwin2, COLOR_PAIR(2));
+                    mvwprintw(helpwin2, 1, 2, "'D' : Draw Mode");
+                    mvwprintw(helpwin2, 2, 2, "'W' : Write text");
+                    mvwprintw(helpwin2, 3, 2, "'L' : Draw line");
+                    mvwprintw(helpwin2, 4, 2, "'C' : Clear last rectangle");
+                    mvwprintw(helpwin2, 5, 2, "'Z' : Delete last text");
+                    mvwprintw(helpwin2, 6, 2, "'X' : Delete last line");
+                    mvwprintw(helpwin2, 7, 2, "'Q' : Quit");
+                    mvwprintw(helpwin2, hw2_h - 2, 2, "Press ENTER or 'H' to close");
+                    wattroff(helpwin2, COLOR_PAIR(2));
+                    wrefresh(helpwin2);
+                }
+                
+                while (1) {
+                    ch3 = helpwin2 ? wgetch(helpwin2) : wgetch(helpwin1);
+                    if (ch3 == 10 || ch3 == 'h' || ch3 == 'H' || ch3 == 27) {
+                        break;
+                    }
+                }
+                
+                if (helpwin2) delwin(helpwin2);
+                delwin(helpwin1);
+            }
+            curs_set(1);
+            helpwin = false;
+            
+            touchwin(win);
+            wrefresh(win);
+        }
 
         //BUTTON TRIGGER
         int ch = wgetch(win);
@@ -328,11 +396,17 @@ int main()
                     line_count--;
                 }
                 break;
+            case 'h':
+            case 'H':
+                helpwin = true;
+    
                 
                 
         }
         
         delwin(win);
+        
+
         
     }
     
