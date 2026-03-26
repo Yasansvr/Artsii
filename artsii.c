@@ -25,6 +25,14 @@ typedef struct text
     char text[100];
 }Text;
 
+typedef struct line
+{
+    int memx;
+    int memy;
+    int dir;
+    int length;
+}line;
+
 int main()
 {
 	initscr();//initialize cursor mode
@@ -35,20 +43,28 @@ int main()
     refresh();
 	keypad(stdscr,TRUE);//function keys reading enabled
     bool exit = false; 
+    bool done = true;
     int cursInitX = 1;
     int cursInitY = 1;
     int memx;
     int memy;
     int height = 0;
     int width = 0;
-    char help[] = "'D' to draw, 'W' to write text, 'C' to clear last rectangle, 'Z' to delete last text, 'Q' to quit";
+    char help[] = "'D' to draw, 'W' to write text, 'L' to draw line |'C' to clear last rectangle, 'Z' to delete last text, 'X' to delete last line | 'Q' to quit";
     char title[] = "ARTSII";
     char text[100];
     
     Rectangle rects[100];
-    Text texts[100];
     int rect_count = 0;
+
+    Text texts[100];
     int text_count = 0;
+
+    line lines[100];
+    int line_count = 0;
+
+    int sec = 0;
+
 	while (!exit)
     {
         int row , col;
@@ -63,6 +79,7 @@ int main()
         wrefresh(win);
         keypad(win, TRUE);
 
+        wtimeout(win, -1); // Always block for input
 
         //DRAW RECTANGLES
         for (int i = 0; i < rect_count; i++)
@@ -92,6 +109,31 @@ int main()
         }
         wmove(win, cursInitY, cursInitX);
 
+        
+        //DRAW LINES
+        for (int i = 0; i < line_count; i++)
+        {
+            sec = i;
+            if (lines[i].dir == KEY_DOWN)
+            {
+                mvwvline(win, lines[i].memy, lines[i].memx, 0, lines[i].length);
+            }
+            else if (lines[i].dir == KEY_UP)
+            {
+                mvwvline(win, lines[i].memy - lines[i].length + 1, lines[i].memx, 0, lines[i].length);
+            }
+            else if (lines[i].dir == KEY_RIGHT)
+            {
+                mvwhline(win, lines[i].memy, lines[i].memx, 0, lines[i].length);
+            }
+            else if (lines[i].dir == KEY_LEFT)
+            {
+                mvwhline(win, lines[i].memy, lines[i].memx - lines[i].length + 1, 0, lines[i].length);
+            }
+            wmove(win, cursInitY, cursInitX);
+        }
+        
+
 
 
         //BUTTON TRIGGER
@@ -99,6 +141,16 @@ int main()
         if (ch == 'q' || ch == 'Q')
         {
             exit=true;
+        }
+
+        if (!done) {
+            if (ch == 10) {
+                sec++;
+                done = true;
+            } else if (line_count > 0 && ch == lines[sec].dir) {
+                // Grow the line when arrow keys are pressed
+                lines[sec].length++;
+            }
         }
 
         switch (ch)
@@ -134,22 +186,29 @@ int main()
             case 'd':
             case 'D':
             {
+                mvwprintw(win, 1, 1, " ~ DRAW MODE ~");
+                curs_set(0);
                 memx = cursInitX;
                 memy = cursInitY;
                 char widthStr[50];
                 char heightStr[50];
-                mvwprintw(win, cursInitY, cursInitX, "ENTER WIDTH:");
+                mvwprintw(win, cursInitY, cursInitX, "WIDTH:");
+                curs_set(1);
                 wrefresh(win);
                 echo();
-                mvwgetnstr(win, cursInitY, cursInitX + 15, widthStr, 49);
-                
+                mvwgetnstr(win, cursInitY, cursInitX + 10, widthStr, 49);
                 width = atoi(widthStr);
                 width = width * 2;
                 noecho();
-                mvwprintw(win, cursInitY, cursInitX, "ENTER HEIGHT:");
+
+                for (size_t i = 0; i < 10 + strlen(widthStr); i++) {
+                    mvwaddch(win, cursInitY, cursInitX + i, ' ');
+                }
+
+                mvwprintw(win, cursInitY, cursInitX, "HEIGHT:");
                 wrefresh(win);
                 echo();
-                mvwgetnstr(win, cursInitY, cursInitX + 15, heightStr, 49);
+                mvwgetnstr(win, cursInitY, cursInitX + 10, heightStr, 49);
                 height = atoi(heightStr);
                 noecho();
                 
@@ -175,8 +234,12 @@ int main()
             case 'w':
             case 'W':
             {
+                mvwprintw(win, 1, 1, " ~ WRITE MODE ~");
+                curs_set(0);
                 echo();
+                curs_set(1);
                 mvwgetnstr(win, cursInitY, cursInitX, text, 99);
+
                 noecho();
                 if (strlen(text) > 0 && text_count < 100)
                 {
@@ -187,6 +250,33 @@ int main()
                 }
                 break;
             }
+            case 'l':
+            case 'L':
+                if (line_count < 100)
+                {
+                    mvwprintw(win, 1, 1, " ~ LINE MODE ~");
+                    curs_set(0);
+                    wrefresh(win);
+                    wtimeout(win, -1); // Block and wait for direction
+                    int ch2 = wgetch(win);
+                    curs_set(1);
+                    if (ch2 == KEY_UP || ch2 == KEY_DOWN || ch2 == KEY_LEFT || ch2 == KEY_RIGHT)
+                    {
+                        lines[line_count].memx = cursInitX;
+                        lines[line_count].memy = cursInitY;
+                        lines[line_count].dir = ch2;
+                        lines[line_count].length = 1;
+                        line_count++;
+                        done = false; // Start growing!
+                    }
+                }
+                break;
+            case 'x':
+            case 'X':
+                line_count--;
+                break;
+                
+                
         }
         
         delwin(win);
