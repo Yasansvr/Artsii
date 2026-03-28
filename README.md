@@ -5,7 +5,7 @@ It allows users to create simple ASCII graphics directly inside the terminal by 
 and drawing shapes such as rectangles, lines, and text. The interface is interactive and controlled entirely through the keyboard,
 with support for basic editing actions and an integrated help window.
 
-![ARTSII Screenshot](sample.png)
+![ARTSII Screenshot](artsii.png)
 
 ## Installation
 
