@@ -1,6 +1,8 @@
 #include<ncurses.h>
 #include<stdlib.h>
 #include<string.h>
+#include<time.h>
+#include<dirent.h>
 
 typedef struct window
 {
@@ -38,6 +40,72 @@ typedef struct corner {
     int y;
     chtype ch;
 } Corner;
+
+void save_diagram(Rectangle* rects, int rect_count, Text* texts, int text_count, line* lines, int line_count, Corner* corners, int corner_count) {
+    time_t t = time(NULL);
+    struct tm tm = *localtime(&t);
+    char filename[100];
+    sprintf(filename, "diagram_%04d-%02d-%02d_%02d-%02d-%02d.txt", 
+            tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, 
+            tm.tm_hour, tm.tm_min, tm.tm_sec);
+    
+    FILE* fp = fopen(filename, "w");
+    if (!fp) return;
+    for (int i=0; i<rect_count; i++) fprintf(fp, "RECT %d %d %d %d\n", rects[i].memx, rects[i].memy, rects[i].width, rects[i].height);
+    for (int i=0; i<text_count; i++) fprintf(fp, "TEXT %d %d %s\n", texts[i].memx, texts[i].memy, texts[i].text);
+    for (int i=0; i<line_count; i++) fprintf(fp, "LINE %d %d %d %d\n", lines[i].memx, lines[i].memy, lines[i].dir, lines[i].length);
+    for (int i=0; i<corner_count; i++) fprintf(fp, "CORNER %d %d %d\n", corners[i].x, corners[i].y, (int)corners[i].ch);
+    fclose(fp);
+}
+
+void load_diagram(const char* filename, Rectangle* rects, int* rect_count, Text* texts, int* text_count, line* lines, int* line_count, Corner* corners, int* corner_count) {
+    FILE* fp = fopen(filename, "r");
+    if (!fp) return;
+    char type[20];
+    *rect_count = *text_count = *line_count = *corner_count = 0;
+    while (fscanf(fp, "%19s", type) == 1) {
+        if (strcmp(type, "RECT") == 0) {
+            fscanf(fp, "%d %d %d %d", &rects[*rect_count].memx, &rects[*rect_count].memy, &rects[*rect_count].width, &rects[*rect_count].height);
+            (*rect_count)++;
+        } else if (strcmp(type, "TEXT") == 0) {
+            fscanf(fp, "%d %d", &texts[*text_count].memx, &texts[*text_count].memy);
+            int ch;
+            while ((ch = fgetc(fp)) == ' '); // skip spaces
+            if (ch != EOF) ungetc(ch, fp);
+            fgets(texts[*text_count].text, sizeof(texts[0].text), fp);
+            texts[*text_count].text[strcspn(texts[*text_count].text, "\n")] = 0; // remove newline
+            (*text_count)++;
+        } else if (strcmp(type, "LINE") == 0) {
+            fscanf(fp, "%d %d %d %d", &lines[*line_count].memx, &lines[*line_count].memy, &lines[*line_count].dir, &lines[*line_count].length);
+            (*line_count)++;
+        } else if (strcmp(type, "CORNER") == 0) {
+            int ch;
+            fscanf(fp, "%d %d %d", &corners[*corner_count].x, &corners[*corner_count].y, &ch);
+            corners[*corner_count].ch = (chtype)ch;
+            (*corner_count)++;
+        }
+    }
+    fclose(fp);
+}
+
+void load_last_diagram(Rectangle* rects, int* rect_count, Text* texts, int* text_count, line* lines, int* line_count, Corner* corners, int* corner_count) {
+    DIR *dir;
+    struct dirent *ent;
+    char last_file[256] = "";
+    if ((dir = opendir(".")) != NULL) {
+        while ((ent = readdir(dir)) != NULL) {
+            if (strncmp(ent->d_name, "diagram_", 8) == 0 && strstr(ent->d_name, ".txt") != NULL) {
+                if (strcmp(ent->d_name, last_file) > 0) {
+                    strcpy(last_file, ent->d_name);
+                }
+            }
+        }
+        closedir(dir);
+    }
+    if (strlen(last_file) > 0) {
+        load_diagram(last_file, rects, rect_count, texts, text_count, lines, line_count, corners, corner_count);
+    }
+}
 
 int main()
 {
@@ -83,6 +151,8 @@ int main()
 
     WINDOW* helpwin1 = NULL;
     int ch3;
+
+    load_last_diagram(rects, &rect_count, texts, &text_count, lines, &line_count, corners, &corner_count);
 
 	while (!exit)
     {
@@ -168,7 +238,7 @@ int main()
             
             int hw_h = win1.height * 2 / 3;
             int hw_w = win1.width * 2 / 3;
-            if (hw_h < 13) hw_h = 13;
+            if (hw_h < 16) hw_h = 16;
             if (hw_w < 40) hw_w = 40;
             int hw_y = (row - hw_h) / 2;
             int hw_x = (col - hw_w) / 2;
@@ -196,7 +266,9 @@ int main()
                     mvwprintw(helpwin2, 4, 2, "'C' : Clear last rectangle");
                     mvwprintw(helpwin2, 5, 2, "'Z' : Delete last text");
                     mvwprintw(helpwin2, 6, 2, "'X' : Delete last line");
-                    mvwprintw(helpwin2, 7, 2, "'Q' : Quit");
+                    mvwprintw(helpwin2, 7, 2, "Ctrl+S : Save diagram");
+                    mvwprintw(helpwin2, 8, 2, "Ctrl+O : Open diagram");
+                    mvwprintw(helpwin2, 9, 2, "'Q' : Quit");
                     mvwprintw(helpwin2, hw2_h - 2, 2, "Press ENTER or 'H' to close");
                     wattroff(helpwin2, COLOR_PAIR(2));
                     wrefresh(helpwin2);
@@ -272,6 +344,116 @@ int main()
 
         switch (ch)
         {
+            case 15: // Ctrl+O
+            {
+                DIR *dir;
+                struct dirent *ent;
+                char files[200][100];
+                int file_count = 0;
+                
+                if ((dir = opendir(".")) != NULL) {
+                    while ((ent = readdir(dir)) != NULL) {
+                        if (strncmp(ent->d_name, "diagram_", 8) == 0 && strstr(ent->d_name, ".txt") != NULL) {
+                            if (file_count < 200) {
+                                strncpy(files[file_count], ent->d_name, 99);
+                                files[file_count][99] = '\0';
+                                file_count++;
+                            }
+                        }
+                    }
+                    closedir(dir);
+                }
+
+                if (file_count == 0) {
+                    wattron(win, A_REVERSE);
+                    mvwprintw(win, row-2, (col-19)/2, " No saved diagrams ");
+                    wattroff(win, A_REVERSE);
+                    wrefresh(win);
+                    napms(1000);
+                    break;
+                }
+
+                for (int i = 0; i < file_count - 1; i++) {
+                    for (int j = i + 1; j < file_count; j++) {
+                        if (strcmp(files[i], files[j]) < 0) {
+                            char temp[100];
+                            strcpy(temp, files[i]);
+                            strcpy(files[i], files[j]);
+                            strcpy(files[j], temp);
+                        }
+                    }
+                }
+
+                int hw_h = file_count + 4;
+                if (hw_h > row * 2 / 3) hw_h = row * 2 / 3;
+                if (hw_h < 10) hw_h = 10;
+                int hw_w = 50;
+                int hw_y = (row - hw_h) / 2;
+                int hw_x = (col - hw_w) / 2;
+
+                WINDOW* fpwin = newwin(hw_h, hw_w, hw_y, hw_x);
+                keypad(fpwin, TRUE);
+                wbkgd(fpwin, COLOR_PAIR(1));
+                box(fpwin, 0, 0);
+                mvwprintw(fpwin, 0, (hw_w - 16) / 2, " Select Diagram ");
+                
+                int selected = 0;
+                int offset = 0;
+                int max_display = hw_h - 2;
+                bool picked = false;
+
+                while (1) {
+                    for (int i = 0; i < max_display; i++) {
+                        int idx = offset + i;
+                        if (idx < file_count) {
+                            if (idx == selected) wattron(fpwin, A_REVERSE);
+                            mvwprintw(fpwin, i + 1, 2, "%-46s", files[idx]);
+                            if (idx == selected) wattroff(fpwin, A_REVERSE);
+                        } else {
+                            mvwprintw(fpwin, i + 1, 2, "%-46s", " ");
+                        }
+                    }
+                    wrefresh(fpwin);
+                    
+                    int fch = wgetch(fpwin);
+                    if (fch == KEY_UP && selected > 0) {
+                        selected--;
+                        if (selected < offset) offset--;
+                    } else if (fch == KEY_DOWN && selected < file_count - 1) {
+                        selected++;
+                        if (selected >= offset + max_display) offset++;
+                    } else if (fch == 10) { // Enter
+                        picked = true;
+                        break;
+                    } else if (fch == 27 || fch == 'q' || fch == 'Q') { // Esc or q
+                        break;
+                    }
+                }
+
+                if (picked) {
+                    load_diagram(files[selected], rects, &rect_count, texts, &text_count, lines, &line_count, corners, &corner_count);
+                    wattron(win, A_REVERSE);
+                    mvwprintw(win, row-2, (col-9)/2, " Loaded! ");
+                    wattroff(win, A_REVERSE);
+                    wrefresh(win);
+                    napms(500);
+                }
+
+                delwin(fpwin);
+                touchwin(win);
+                wrefresh(win);
+                break;
+            }
+
+            case 19: // Ctrl+S
+                save_diagram(rects, rect_count, texts, text_count, lines, line_count, corners, corner_count);
+                wattron(win, A_REVERSE);
+                mvwprintw(win, 2, (col-strlen(" Saved! "))/2, " Saved! ");
+                wattroff(win, A_REVERSE);
+                wrefresh(win);
+                napms(500);
+                break;
+
             case KEY_RIGHT:
                 if (cursInitX < win1.width - 2)
                 {
