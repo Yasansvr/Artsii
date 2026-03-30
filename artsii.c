@@ -107,7 +107,7 @@ void load_last_diagram(Rectangle* rects, int* rect_count, Text* texts, int* text
     }
 }
 
-int main()
+int main(int argc , char *argv[])
 {
 	initscr();//initialize cursor mode
     if (has_colors()) {
@@ -152,7 +152,17 @@ int main()
     WINDOW* helpwin1 = NULL;
     int ch3;
 
-    load_last_diagram(rects, &rect_count, texts, &text_count, lines, &line_count, corners, &corner_count);
+    if (argc > 1) {
+        FILE *test_fp = fopen(argv[1], "r");
+        if (test_fp) {
+            fclose(test_fp);
+            load_diagram(argv[1], rects, &rect_count, texts, &text_count, lines, &line_count, corners, &corner_count);
+        } else {
+            load_last_diagram(rects, &rect_count, texts, &text_count, lines, &line_count, corners, &corner_count);
+        }
+    } else {
+        load_last_diagram(rects, &rect_count, texts, &text_count, lines, &line_count, corners, &corner_count);
+    }
 
 	while (!exit)
     {
