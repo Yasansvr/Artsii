@@ -51,10 +51,10 @@ void save_diagram(Rectangle* rects, int rect_count, Text* texts, int text_count,
     
     FILE* fp = fopen(filename, "w");
     if (!fp) return;
-    for (int i=0; i<rect_count; i++) fprintf(fp, "RECT %d %d %d %d\n", rects[i].memx, rects[i].memy, rects[i].width, rects[i].height);
-    for (int i=0; i<text_count; i++) fprintf(fp, "TEXT %d %d %s\n", texts[i].memx, texts[i].memy, texts[i].text);
-    for (int i=0; i<line_count; i++) fprintf(fp, "LINE %d %d %d %d\n", lines[i].memx, lines[i].memy, lines[i].dir, lines[i].length);
-    for (int i=0; i<corner_count; i++) fprintf(fp, "CORNER %d %d %d\n", corners[i].x, corners[i].y, (int)corners[i].ch);
+    for (int i=0; i<rect_count; i++) fprintf(fp, "R %d %d %d %d\n", rects[i].memx, rects[i].memy, rects[i].width, rects[i].height);
+    for (int i=0; i<text_count; i++) fprintf(fp, "T %d %d %s\n", texts[i].memx, texts[i].memy, texts[i].text);
+    for (int i=0; i<line_count; i++) fprintf(fp, "L %d %d %d %d\n", lines[i].memx, lines[i].memy, lines[i].dir, lines[i].length);
+    for (int i=0; i<corner_count; i++) fprintf(fp, "C %d %d %d\n", corners[i].x, corners[i].y, (int)corners[i].ch);
     fclose(fp);
 }
 
@@ -64,10 +64,10 @@ void load_diagram(const char* filename, Rectangle* rects, int* rect_count, Text*
     char type[20];
     *rect_count = *text_count = *line_count = *corner_count = 0;
     while (fscanf(fp, "%19s", type) == 1) {
-        if (strcmp(type, "RECT") == 0) {
+        if (strcmp(type, "R") == 0) {
             fscanf(fp, "%d %d %d %d", &rects[*rect_count].memx, &rects[*rect_count].memy, &rects[*rect_count].width, &rects[*rect_count].height);
             (*rect_count)++;
-        } else if (strcmp(type, "TEXT") == 0) {
+        } else if (strcmp(type, "T") == 0) {
             fscanf(fp, "%d %d", &texts[*text_count].memx, &texts[*text_count].memy);
             int ch;
             while ((ch = fgetc(fp)) == ' '); // skip spaces
@@ -75,10 +75,10 @@ void load_diagram(const char* filename, Rectangle* rects, int* rect_count, Text*
             fgets(texts[*text_count].text, sizeof(texts[0].text), fp);
             texts[*text_count].text[strcspn(texts[*text_count].text, "\n")] = 0; // remove newline
             (*text_count)++;
-        } else if (strcmp(type, "LINE") == 0) {
+        } else if (strcmp(type, "L") == 0) {
             fscanf(fp, "%d %d %d %d", &lines[*line_count].memx, &lines[*line_count].memy, &lines[*line_count].dir, &lines[*line_count].length);
             (*line_count)++;
-        } else if (strcmp(type, "CORNER") == 0) {
+        } else if (strcmp(type, "C") == 0) {
             int ch;
             fscanf(fp, "%d %d %d", &corners[*corner_count].x, &corners[*corner_count].y, &ch);
             corners[*corner_count].ch = (chtype)ch;
